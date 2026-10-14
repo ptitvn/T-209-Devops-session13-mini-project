@@ -32,51 +32,53 @@ public class PostController {
     }
 
     @GetMapping
-    PageView<PostView> search(@RequestParam(defaultValue = "") String keyword,
-                              @RequestParam(required = false) Long categoryId,
-                              @RequestParam(defaultValue = "0") int page,
-                              @RequestParam(defaultValue = "12") int size,
-                              Principal principal) {
-        return service.search(keyword, categoryId, page, size, principal);
+    public PageView<PostView> search(@RequestParam(defaultValue = "") String keyword,
+                                     @RequestParam(required = false) Long categoryId,
+                                     @RequestParam(required = false) Boolean allowRegistration,
+                                     @RequestParam(required = false) Boolean myPosts,
+                                     @RequestParam(defaultValue = "0") int page,
+                                     @RequestParam(defaultValue = "12") int size,
+                                     Principal principal) {
+        return service.search(keyword, categoryId, allowRegistration, myPosts, page, size, principal);
     }
 
     @GetMapping("/{id}")
-    PostView findOne(@PathVariable Long id, Principal principal) {
+    public PostView findOne(@PathVariable Long id, Principal principal) {
         return service.findOne(id, principal);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    PostView create(@Valid @RequestBody PostRequest request, Principal principal) {
+    public PostView create(@Valid @RequestBody PostRequest request, Principal principal) {
         return service.create(request, principal);
     }
 
     @PutMapping("/{id}")
-    PostView update(@PathVariable Long id, @Valid @RequestBody PostRequest request, Principal principal) {
+    public PostView update(@PathVariable Long id, @Valid @RequestBody PostRequest request, Principal principal) {
         return service.update(id, request, principal);
     }
 
     @PatchMapping("/{id}/status")
-    PostView changeStatus(@PathVariable Long id, @Valid @RequestBody StatusRequest request,
-                          Principal principal) {
+    public PostView changeStatus(@PathVariable Long id, @Valid @RequestBody StatusRequest request,
+                                 Principal principal) {
         return service.changeStatus(id, request.status(), principal);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void delete(@PathVariable Long id, Principal principal) {
+    public void delete(@PathVariable Long id, Principal principal) {
         service.delete(id, principal);
     }
 
     @PostMapping("/{id}/comments")
     @ResponseStatus(HttpStatus.CREATED)
-    CommentView addComment(@PathVariable Long id, @Valid @RequestBody CommentRequest request,
-                           Principal principal) {
+    public CommentView addComment(@PathVariable Long id, @Valid @RequestBody CommentRequest request,
+                                  Principal principal) {
         return service.addComment(id, request, principal);
     }
 
     @PostMapping("/{id}/reaction")
-    Map<String, Boolean> toggleReaction(@PathVariable Long id, Principal principal) {
+    public Map<String, Boolean> toggleReaction(@PathVariable Long id, Principal principal) {
         return Map.of("reacted", service.toggleReaction(id, principal));
     }
 }

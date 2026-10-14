@@ -21,6 +21,8 @@ import vn.edu.ptit.campushub.post.PostDtos.PostRequest;
 import vn.edu.ptit.campushub.post.PostDtos.PostView;
 import vn.edu.ptit.campushub.reaction.Reaction;
 import vn.edu.ptit.campushub.reaction.ReactionRepository;
+import vn.edu.ptit.campushub.registration.RegistrationRepository;
+import vn.edu.ptit.campushub.registration.RegistrationStatus;
 import vn.edu.ptit.campushub.user.Role;
 import vn.edu.ptit.campushub.user.User;
 import vn.edu.ptit.campushub.user.UserRepository;
@@ -33,20 +35,33 @@ public class PostService {
     private final UserRepository users;
     private final CommentRepository comments;
     private final ReactionRepository reactions;
+    private final RegistrationRepository registrations;
 
     public PostService(PostRepository posts, CategoryRepository categories, UserRepository users,
-                       CommentRepository comments, ReactionRepository reactions) {
+                       CommentRepository comments, ReactionRepository reactions,
+                       RegistrationRepository registrations) {
         this.posts = posts;
         this.categories = categories;
         this.users = users;
         this.comments = comments;
         this.reactions = reactions;
+        this.registrations = registrations;
     }
 
-    public PageView<PostView> search(String keyword, Long categoryId, int page, int size, Principal principal) {
+    public PageView<PostView> search(String keyword, Long categoryId, Boolean allowRegistration,
+                                     Boolean myPosts, int page, int size, Principal principal) {
         int safeSize = Math.min(Math.max(size, 1), 50);
-        Page<Post> result = posts.searchPublished(keyword == null ? "" : keyword.trim(), categoryId,
-                PageRequest.of(Math.max(page, 0), safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+        User current = findCurrentUser(principal);
+        Long authorId = (myPosts != null && myPosts && current != null) ? current.getId() : null;
+
+        Page<Post> result = posts.searchPublished(
+                keyword == null ? "" : keyword.trim(),
+                categoryId,
+                allowRegistration,
+                authorId,
+                PageRequest.of(Math.max(page, 0), safeSize, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+
         List<PostView> content = result.getContent().stream()
                 .map(post -> toView(post, principal, false))
                 .toList();
@@ -62,7 +77,16 @@ public class PostService {
     public PostView create(PostRequest request, Principal principal) {
         User author = currentUser(principal);
         Category category = findCategory(request.categoryId());
-        Post post = posts.save(new Post(request.title().trim(), request.content().trim(), category, author));
+        String img = (request.imageUrl() != null && !request.imageUrl().isBlank()) ? request.imageUrl().trim() : null;
+        Post post = posts.save(new Post(
+                request.title().trim(),
+                request.content().trim(),
+                img,
+                request.isAllowRegistration(),
+                request.maxParticipants(),
+                category,
+                author
+        ));
         return toView(post, principal, true);
     }
 
@@ -70,7 +94,15 @@ public class PostService {
     public PostView update(Long id, PostRequest request, Principal principal) {
         Post post = findPost(id);
         requireOwnerOrAdmin(post, currentUser(principal));
-        post.update(request.title().trim(), request.content().trim(), findCategory(request.categoryId()));
+        String img = (request.imageUrl() != null && !request.imageUrl().isBlank()) ? request.imageUrl().trim() : null;
+        post.update(
+                request.title().trim(),
+                request.content().trim(),
+                img,
+                request.isAllowRegistration(),
+                request.maxParticipants(),
+                findCategory(request.categoryId())
+        );
         return toView(post, principal, true);
     }
 
@@ -92,6 +124,7 @@ public class PostService {
         requireOwnerOrAdmin(post, currentUser(principal));
         comments.deleteByPostId(id);
         reactions.deleteByPostId(id);
+        registrations.deleteByPostId(id);
         posts.delete(post);
     }
 
@@ -122,14 +155,42 @@ public class PostService {
         List<CommentView> commentViews = includeComments
                 ? comments.findByPostIdOrderByCreatedAtAsc(post.getId()).stream().map(CommentView::from).toList()
                 : List.of();
-        return new PostView(post.getId(), post.getTitle(), post.getContent(), post.getStatus(),
+
+        long approvedCount = post.isAllowRegistration()
+                ? registrations.countByPostIdAndStatus(post.getId(), RegistrationStatus.APPROVED)
+                : 0;
+        long pendingCount = post.isAllowRegistration()
+                ? registrations.countByPostIdAndStatus(post.getId(), RegistrationStatus.PENDING)
+                : 0;
+
+        String userRegStatus = null;
+        if (current != null && post.isAllowRegistration()) {
+            userRegStatus = registrations.findByPostIdAndUserId(post.getId(), current.getId())
+                    .map(r -> r.getStatus().name())
+                    .orElse(null);
+        }
+
+        return new PostView(
+                post.getId(),
+                post.getTitle(),
+                post.getContent(),
+                post.getImageUrl(),
+                post.getStatus(),
+                post.isAllowRegistration(),
+                post.getMaxParticipants(),
+                approvedCount,
+                pendingCount,
+                userRegStatus,
                 new CategoryView(post.getCategory().getId(), post.getCategory().getName(), post.getCategory().getSlug()),
                 new AuthorView(post.getAuthor().getId(), post.getAuthor().getUsername(),
                         post.getAuthor().getDisplayName()),
-                post.getCreatedAt(), post.getUpdatedAt(), reactions.countByPostId(post.getId()),
+                post.getCreatedAt(),
+                post.getUpdatedAt(),
+                reactions.countByPostId(post.getId()),
                 comments.countByPostId(post.getId()),
                 current != null && reactions.findByPostIdAndUserId(post.getId(), current.getId()).isPresent(),
-                commentViews);
+                commentViews
+        );
     }
 
     private Post findVisiblePost(Long id, Principal principal) {

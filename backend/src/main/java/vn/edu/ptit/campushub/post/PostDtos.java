@@ -16,7 +16,18 @@ public final class PostDtos {
             @Size(max = 160, message = "Tiêu đề tối đa 160 ký tự") String title,
             @NotBlank(message = "Nội dung không được để trống")
             @Size(max = 10000, message = "Nội dung tối đa 10.000 ký tự") String content,
-            @NotNull(message = "Vui lòng chọn chuyên mục") Long categoryId) {
+            @NotNull(message = "Vui lòng chọn chuyên mục") Long categoryId,
+            @Size(max = 500, message = "URL hình ảnh tối đa 500 ký tự") String imageUrl,
+            Boolean allowRegistration,
+            Integer maxParticipants) {
+
+        public PostRequest(String title, String content, Long categoryId) {
+            this(title, content, categoryId, null, false, null);
+        }
+
+        public boolean isAllowRegistration() {
+            return allowRegistration != null && allowRegistration;
+        }
     }
 
     public record StatusRequest(@NotNull(message = "Trạng thái không được để trống") PostStatus status) {
@@ -41,7 +52,10 @@ public final class PostDtos {
         }
     }
 
-    public record PostView(Long id, String title, String content, PostStatus status,
+    public record PostView(Long id, String title, String content, String imageUrl,
+                           PostStatus status, boolean allowRegistration, Integer maxParticipants,
+                           long approvedParticipantCount, long pendingParticipantCount,
+                           String userRegistrationStatus,
                            CategoryView category, AuthorView author, Instant createdAt, Instant updatedAt,
                            long reactionCount, long commentCount, boolean reactedByCurrentUser,
                            List<CommentView> comments) {

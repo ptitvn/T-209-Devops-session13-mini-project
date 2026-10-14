@@ -1,11 +1,14 @@
 .env
 .idea/
 *.iml
+bin/
+backend/bin/
 backend/build/
 backend/.gradle/
 backend/target/
 frontend/node_modules/
 frontend/dist/
+report_gen/
 *.log
 !frontend/package.json
 !frontend/package-lock.json
